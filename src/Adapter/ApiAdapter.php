@@ -4,18 +4,17 @@ declare(strict_types=1);
 
 namespace Xaben\DataFilterApi\Adapter;
 
-use Xaben\DataFilter\Adapter\AdapterInterface;
+use Xaben\DataFilter\Adapter\Adapter;
 use Xaben\DataFilter\Adapter\BaseAdapter;
-use Xaben\DataFilter\Definition\FilterDefinitionInterface;
+use Xaben\DataFilter\Definition\FilterDefinition;
 use Xaben\DataFilter\Filter\CollectionFilter;
 use Xaben\DataFilter\Pagination\PaginationConfiguration;
-use Symfony\Component\HttpFoundation\Request;
 
-class ApiAdapter extends BaseAdapter implements AdapterInterface
+class ApiAdapter extends BaseAdapter implements Adapter
 {
     protected function processPagination(
-        FilterDefinitionInterface $definition,
-        Request $request,
+        FilterDefinition $definition,
+        array $requestParameters,
         CollectionFilter $collectionFilter
     ): void {
         $paginationConfiguration = $definition->getPaginationConfiguration();
@@ -24,8 +23,8 @@ class ApiAdapter extends BaseAdapter implements AdapterInterface
         }
 
         [$offset, $limit] = $paginationConfiguration->getByPage(
-            (int) $request->query->get('page', '1'),
-            (int) $request->query->get('per_page', (string) PaginationConfiguration::DEFAULT_RESULT_COUNT)
+            (int) ($requestParameters['page'] ?? 1),
+            (int) ($requestParameters['per_page'] ?? PaginationConfiguration::DEFAULT_RESULT_COUNT),
         );
 
         $collectionFilter->setOffset($offset);
@@ -33,14 +32,14 @@ class ApiAdapter extends BaseAdapter implements AdapterInterface
     }
 
     protected function processSortable(
-        FilterDefinitionInterface $definition,
-        Request $request,
+        FilterDefinition $definition,
+        array $requestParameters,
         CollectionFilter $collectionFilter
     ): void {
         $sortConfiguration = $definition->getSortConfiguration();
         $sort = [];
-        foreach ($request->query->all()['order'] ?? [] as $columnName => $value) {
-            $sortDefinition = $sortConfiguration->getSortDefinitionByName($columnName);
+        foreach ($requestParameters['order'] ?? [] as $columnName => $value) {
+            $sortDefinition = $sortConfiguration->getSortDefinition($columnName);
             if ($sortDefinition) {
                 $sort = array_merge($sort, $sortDefinition->getSortOrder($value));
             }
@@ -56,28 +55,21 @@ class ApiAdapter extends BaseAdapter implements AdapterInterface
     }
 
     protected function processFilters(
-        FilterDefinitionInterface $definition,
-        Request $request,
+        FilterDefinition $definition,
+        array $requestParameters,
         CollectionFilter $collectionFilter
     ): void {
         $filterConfiguration = $definition->getFilterConfiguration();
         $criteria = [];
-        foreach ($request->query->all()['filter'] ?? [] as $columnName => $value) {
-            $filter = $filterConfiguration->getFilterByName($columnName);
+        foreach ($requestParameters['filter'] ?? [] as $columnName => $value) {
+            $filter = $filterConfiguration->getFilter($columnName);
             if ($filter) {
                 $criteria = array_merge($criteria, $filter->getFilter($value));
             }
         }
 
-        $predefinedFilters = $definition->getPredefinedFilterConfiguration($request)->getAllFilters();
-        $collectionFilter->setCriteria(
-            array_merge(
-                $definition->getDefaultFilterConfiguration($request)->getAllFilters(),
-                $criteria,
-                $predefinedFilters
-            )
-        );
-
-        $collectionFilter->setPredefinedCriteria($predefinedFilters);
+        $collectionFilter->setDefaultCriteria($definition->getDefaultFilterConfiguration($requestParameters)->getCriteria());
+        $collectionFilter->setUserCriteria($criteria);
+        $collectionFilter->setPredefinedCriteria($definition->getPredefinedFilterConfiguration($requestParameters)->getCriteria());
     }
 }
