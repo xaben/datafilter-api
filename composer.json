@@ -6,7 +6,7 @@
     "minimum-stability": "stable",
     "require": {
         "php": ">=8.0",
-        "league/fractal": "^0.19.2",
+        "league/fractal": "<1.0",
         "xaben/datafilter": "dev-main"
     },
     "require-dev": {
